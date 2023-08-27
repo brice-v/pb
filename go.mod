@@ -4,6 +4,7 @@ go 1.21.0
 
 require (
 	github.com/gofiber/fiber/v2 v2.49.0
+	github.com/gofiber/template/html/v2 v2.0.5
 	github.com/jmoiron/sqlx v1.3.5
 	modernc.org/sqlite v1.25.0
 )
@@ -11,6 +12,8 @@ require (
 require (
 	github.com/andybalholm/brotli v1.0.5 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/gofiber/template v1.8.2 // indirect
+	github.com/gofiber/utils v1.1.0 // indirect
 	github.com/google/uuid v1.3.1 // indirect
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/klauspost/compress v1.16.7 // indirect

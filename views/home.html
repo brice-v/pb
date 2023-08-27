@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+    {{ template "header" }}
+    <body>
+        <h1>Paste into the textarea below...</h1>
+        {{ if . }}
+        <p style="color: red;">An error has occurred creating the paste!</p>
+        {{ end }}
+        <div>
+            <form action="/paste-ui" method="post">
+                <label for="title">Title:</label>
+                <input type="text" name="title"></input>
+                <label for="text">Paste:</label>
+                <textarea name="text" autofocus="true" required></textarea>
+                <input type="submit" value="Create New Paste">
+            </form>
+        </div>
+        <br>
+    </body>
+</html>
