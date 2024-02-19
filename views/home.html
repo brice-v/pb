@@ -2,8 +2,9 @@
 <html>
     {{ template "header" }}
     <body>
+        {{ template "navbar" }}
         <h1>Paste into the textarea below...</h1>
-        {{ if . }}
+        {{ if .Error }}
         <p style="color: red;">An error has occurred creating the paste!</p>
         {{ end }}
         <div>

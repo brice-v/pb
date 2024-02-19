@@ -42,7 +42,7 @@ func NewPB() *PB {
 	db.DB.Exec(sql.InsertPasteTable, -1, "seed", "seed")
 
 	app.Get("/", func(c *fiber.Ctx) error {
-		return c.Render("views/home", "")
+		return c.Render("views/home", fiber.Map{})
 	})
 
 	app.Get("/paste/:id", handlers.GetPaste)

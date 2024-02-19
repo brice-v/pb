@@ -2,7 +2,23 @@
 <head>
     <title>pb - paste bin</title>
     <link rel="stylesheet" href="/public/water.css">
-    <script src="/public/htmx.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        li a:hover {
+            background-color: #12191f;
+          }
+    </style>
 </head>
+{{ end }}
+
+{{ define "navbar" }}
+<ul style="list-style-type: none; margin: 0; padding: 0; overflow: hidden; background-color: #202b38;">
+    <li style="float: left;"><a style="display: block; text-align: center; padding: 1em 1em; text-decoration: none; color: white;" href="/">Home</a></li>
+    {{ if .IsLoggedIn }}
+        <li style="float: left;"><a style="display: block; text-align: center; padding: 1em 1em; text-decoration: none; color: white;" href="/search-pastes-ui">Search</a></li>
+        <li style="float: left;"><a style="display: block; text-align: center; padding: 1em 1em; text-decoration: none; color: white;" href="/logout-ui">Logout</a></li>
+    {{ else }}
+        <li style="float: left;"><a style="display: block; text-align: center; padding: 1em 1em; text-decoration: none; color: white;" href="/login-ui">Login</a></li>
+    {{ end }}
+  </ul>
 {{ end }}
