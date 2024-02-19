@@ -8,7 +8,7 @@
 - simple api
 - no config
 
-Default URL is http://127.0.0.1:3001
+Default URL is `http://127.0.0.1:3001`
 
 ### JSON enpoints
 

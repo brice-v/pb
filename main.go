@@ -2,16 +2,19 @@ package main
 
 import (
 	"embed"
+	"fmt"
 	"log"
 	"net/http"
-	"strconv"
+	"os"
+	"os/signal"
+	"pb/db"
+	"pb/handlers"
+	"pb/sql"
+	"syscall"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/filesystem"
 	"github.com/gofiber/template/html/v2"
-	"github.com/jmoiron/sqlx"
-
-	_ "modernc.org/sqlite"
 )
 
 //go:embed views/*
@@ -20,19 +23,11 @@ var viewsStaticDir embed.FS
 //go:embed public/*
 var publicStaticDir embed.FS
 
-type Paste struct {
-	Title string `json:"title"`
-	Text  string `json:"text"`
+type PB struct {
+	app *fiber.App
 }
 
-const createPasteTableSql = `CREATE TABLE IF NOT EXISTS pastes(id INTEGER PRIMARY KEY, title TEXT, paste_text TEXT NOT NULL);`
-const getMaxPasteIdSql = `SELECT MAX(id) FROM pastes;`
-const insertPasteTableSql = `INSERT INTO pastes (id, title, paste_text) VALUES (?, ?, ?);`
-const getPasteSql = `SELECT title, paste_text FROM pastes WHERE id = ?;`
-
-func main() {
-	db := sqlx.MustConnect("sqlite", "pb.db?_pragma=journal_mode(WAL)")
-
+func NewPB() *PB {
 	engine := html.NewFileSystem(http.FS(viewsStaticDir), ".html")
 	app := fiber.New(fiber.Config{
 		Views: engine,
@@ -43,93 +38,48 @@ func main() {
 		Root:       http.FS(publicStaticDir),
 		PathPrefix: "public",
 	}))
-	db.Exec(createPasteTableSql)
-	db.Exec(insertPasteTableSql, -1, "seed", "seed")
+	db.DB.Exec(sql.CreatePasteTable)
+	db.DB.Exec(sql.InsertPasteTable, -1, "seed", "seed")
 
 	app.Get("/", func(c *fiber.Ctx) error {
 		return c.Render("views/home", "")
 	})
 
-	app.Get("/paste/:id", func(c *fiber.Ctx) error {
-		sid := c.Params("id", "")
-		id, err := strconv.ParseInt(sid, 10, 64)
-		if err != nil {
-			log.Printf("GET /paste/:id (%s) error: %s", sid, err.Error())
-			return c.Status(fiber.StatusBadRequest).JSON("invalid id " + sid)
-		}
-		var title, text string
-		row := db.QueryRow(getPasteSql, id)
-		err = row.Scan(&title, &text)
-		if err != nil {
-			log.Printf("GET /paste/:id (%s) error: %s", sid, err.Error())
-			return c.Status(fiber.StatusInternalServerError).JSON("failed to find paste with id " + sid)
-		}
-		return c.JSON(Paste{Title: title, Text: text})
-	})
-	pasteHandler := func(c *fiber.Ctx) (error, int) {
-		p := new(Paste)
-		if err := c.BodyParser(p); err != nil {
-			log.Printf("POST /paste error: %s", err.Error())
-			return err, -1
-		}
-		if p.Title == "" {
-			log.Printf("POST /paste error: title is empty")
-			return c.Status(fiber.StatusBadRequest).JSON("title is empty"), -1
-		}
-		if p.Text == "" {
-			log.Printf("POST /paste error: text is empty")
-			return c.Status(fiber.StatusBadRequest).JSON("text is empty"), -1
-		}
-		row := db.QueryRow(getMaxPasteIdSql)
-		var curId int
-		err := row.Scan(&curId)
-		if err != nil {
-			log.Printf("POST /paste error: %s", err.Error())
-			return c.Status(fiber.StatusInternalServerError).JSON("failed to get id"), -1
-		}
-		// Increment for new paste
-		curId++
-		_, err = db.Exec(insertPasteTableSql, curId, p.Title, p.Text)
-		if err != nil {
-			log.Printf("POST /paste error: %s", err.Error())
-			return c.Status(fiber.StatusInternalServerError).JSON("failed to insert paste"), -1
-		}
-		return c.JSON(curId), curId
-	}
-	app.Post("/paste", func(c *fiber.Ctx) error {
-		err, _ := pasteHandler(c)
-		return err
-	})
-	app.Post("/paste-ui", func(c *fiber.Ctx) error {
-		_, id := pasteHandler(c)
-		if id == -1 {
-			// Return the error on the ui
-			return c.Render("views/home", fiber.Map{"Error": "Some error happened."})
-		}
-		var title, text string
-		row := db.QueryRow(getPasteSql, id)
-		err := row.Scan(&title, &text)
-		if err != nil {
-			return c.Render("views/home", fiber.Map{"Error": "Failed to get paste."})
-		}
-		return c.Render("views/paste", fiber.Map{"Title": title, "Text": text, "Id": id})
-	})
-	app.Get("/paste-ui/:id", func(c *fiber.Ctx) error {
-		sid := c.Params("id", "")
-		id, err := strconv.ParseInt(sid, 10, 64)
-		if err != nil {
-			log.Printf("GET /paste-ui/:id (%s) error: %s", sid, err.Error())
-			return c.Render("views/home", fiber.Map{"Error": "Failed to get paste."})
-		}
-		var title, text string
-		row := db.QueryRow(getPasteSql, id)
-		err = row.Scan(&title, &text)
-		if err != nil {
-			log.Printf("GET /paste-ui/:id (%s) error: %s", sid, err.Error())
-			return c.Render("views/home", fiber.Map{"Error": "Failed to get paste."})
-		}
-		return c.Render("views/paste", fiber.Map{"Title": title, "Text": text, "Id": id})
-	})
+	app.Get("/paste/:id", handlers.GetPaste)
 
-	app.Listen(":3001")
+	app.Post("/paste", handlers.PostPaste)
+	app.Post("/paste-ui", handlers.PostPasteUI)
+	app.Get("/paste-ui/:id", handlers.GetPasteUI)
+	return &PB{app: app}
+}
+
+func (pb *PB) Run() {
+	if pb.app == nil {
+		log.Fatal("PB error: *fiber.App is nil")
+	}
+	go func() {
+		if err := pb.app.Listen(":3001"); err != nil {
+			log.Panic("error while listening: " + err.Error())
+		}
+	}()
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+
+	<-c
+	fmt.Println("gracefully shutting down...")
+	if err := pb.app.Shutdown(); err != nil {
+		log.Printf("FAILED to shutdown app, error: %s", err.Error())
+	}
+
+	fmt.Println("running cleanup tasks...")
+	if err := db.DB.Close(); err != nil {
+		log.Printf("FAILED to close DB, error: %s", err.Error())
+	}
+	fmt.Println("pb shutdown")
+}
+
+func main() {
+	pb := NewPB()
+	pb.Run()
 }
